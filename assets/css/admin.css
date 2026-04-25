@@ -1,0 +1,417 @@
+/* Robot Forooshande - Admin Styles (Commercial Plugin Design) */
+
+/* ===== Variables ===== */
+:root {
+    --rf-admin-primary: #6366f1;
+    --rf-admin-primary-dark: #4f46e5;
+    --rf-admin-primary-light: #818cf8;
+    --rf-admin-bg: #f1f5f9;
+    --rf-admin-card: #ffffff;
+    --rf-admin-border: #e2e8f0;
+    --rf-admin-text: #1e293b;
+    --rf-admin-text-muted: #64748b;
+    --rf-admin-text-light: #94a3b8;
+    --rf-admin-success: #10b981;
+    --rf-admin-error: #ef4444;
+    --rf-admin-warning: #f59e0b;
+    --rf-admin-radius: 12px;
+    --rf-admin-sidebar-w: 220px;
+}
+
+/* ===== Reset WP Admin defaults inside our wrap ===== */
+.rf-admin-wrap { direction: rtl; }
+.rf-admin-wrap *,
+.rf-admin-wrap *::before,
+.rf-admin-wrap *::after { box-sizing: border-box; }
+
+/* ===== Header ===== */
+.rf-admin-header {
+    background: linear-gradient(135deg, var(--rf-admin-primary), var(--rf-admin-primary-light));
+    margin: -6px -20px 0 0;
+    padding: 0 32px;
+}
+.rf-admin-header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px 0;
+}
+.rf-admin-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.rf-admin-logo {
+    width: 48px;
+    height: 48px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    backdrop-filter: blur(10px);
+}
+.rf-admin-brand h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+    padding: 0;
+    line-height: 1.3;
+}
+.rf-admin-version {
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    font-weight: 400;
+}
+
+/* ===== Body Layout ===== */
+.rf-admin-body {
+    display: flex;
+    gap: 24px;
+    max-width: 1200px;
+    margin: -12px auto 0;
+    padding: 0 12px;
+    position: relative;
+    z-index: 1;
+}
+
+/* ===== Sidebar ===== */
+.rf-admin-sidebar {
+    width: var(--rf-admin-sidebar-w);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background: var(--rf-admin-card);
+    border-radius: var(--rf-admin-radius);
+    padding: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+    align-self: flex-start;
+    position: sticky;
+    top: 42px;
+}
+.rf-admin-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--rf-admin-text-muted);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+.rf-admin-nav-item:hover {
+    background: #f8fafc;
+    color: var(--rf-admin-text);
+}
+.rf-admin-nav-item:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(99,102,241,0.3);
+}
+.rf-admin-nav-item.rf-active {
+    background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.06));
+    color: var(--rf-admin-primary);
+    font-weight: 600;
+}
+.rf-admin-nav-item.rf-active .rf-nav-icon { color: var(--rf-admin-primary); }
+.rf-nav-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+.rf-admin-nav-item.rf-active .rf-nav-icon { opacity: 1; }
+
+/* ===== Content ===== */
+.rf-admin-content {
+    flex: 1;
+    min-width: 0;
+    background: var(--rf-admin-card);
+    border-radius: var(--rf-admin-radius);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+    padding: 28px 32px;
+    margin-bottom: 40px;
+}
+
+/* ===== Settings Page Inner ===== */
+.rf-settings-page {
+    direction: rtl;
+}
+.rf-settings-page h3 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--rf-admin-text);
+    margin: 32px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #f1f5f9;
+}
+.rf-settings-page h3:first-child { margin-top: 0; }
+
+/* ===== Form Table ===== */
+.rf-settings-page .form-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+.rf-settings-page .form-table th {
+    width: 180px;
+    text-align: right;
+    padding: 14px 0 14px 20px;
+    vertical-align: top;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--rf-admin-text);
+    line-height: 1.6;
+}
+.rf-settings-page .form-table td {
+    padding: 14px 0;
+    text-align: right;
+}
+.rf-settings-page .form-table tr {
+    border-bottom: 1px solid #f1f5f9;
+}
+.rf-settings-page .form-table tr:last-child { border-bottom: none; }
+
+/* ===== Inputs ===== */
+.rf-settings-page input[type="text"],
+.rf-settings-page input[type="url"],
+.rf-settings-page input[type="password"],
+.rf-settings-page input[type="number"],
+.rf-settings-page input[type="tel"],
+.rf-settings-page input[type="email"],
+.rf-settings-page textarea,
+.rf-settings-page select {
+    border: 1.5px solid var(--rf-admin-border);
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--rf-admin-text);
+    background: #f8fafc;
+    transition: all 0.2s ease;
+    line-height: 1.5;
+}
+.rf-settings-page input[type="text"]:focus,
+.rf-settings-page input[type="url"]:focus,
+.rf-settings-page input[type="password"]:focus,
+.rf-settings-page input[type="number"]:focus,
+.rf-settings-page input[type="tel"]:focus,
+.rf-settings-page input[type="email"]:focus,
+.rf-settings-page textarea:focus,
+.rf-settings-page select:focus {
+    border-color: var(--rf-admin-primary);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
+    outline: none;
+}
+.rf-settings-page .regular-text { width: 380px; max-width: 100%; }
+.rf-settings-page .large-text { width: 100%; max-width: 100%; min-height: 80px; resize: vertical; }
+.rf-settings-page .small-text { width: 80px; }
+
+.rf-settings-page .description {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--rf-admin-text-light);
+    line-height: 1.6;
+}
+
+/* ===== Checkbox ===== */
+.rf-settings-page input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    border: 1.5px solid var(--rf-admin-border);
+    margin-left: 8px;
+    accent-color: var(--rf-admin-primary);
+    cursor: pointer;
+}
+.rf-settings-page label {
+    cursor: pointer;
+}
+
+/* ===== Select ===== */
+.rf-settings-page select {
+    min-width: 200px;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: left 12px center;
+    padding-left: 32px;
+}
+
+/* ===== Submit Button ===== */
+.rf-settings-page .submit { margin-top: 24px; padding-top: 20px; border-top: 2px solid #f1f5f9; }
+.rf-settings-page .rf-save-btn {
+    background: linear-gradient(135deg, var(--rf-admin-primary), var(--rf-admin-primary-light)) !important;
+    border: none !important;
+    color: #fff !important;
+    padding: 10px 28px !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    font-family: inherit !important;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+    height: auto !important;
+    line-height: 1.5 !important;
+}
+.rf-settings-page .rf-save-btn:hover {
+    box-shadow: 0 6px 20px rgba(99,102,241,0.4);
+    transform: translateY(-1px);
+}
+.rf-settings-page .rf-save-btn:active { transform: translateY(0); }
+.rf-settings-page .rf-save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* ===== Save Status ===== */
+.rf-save-status {
+    margin-right: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    vertical-align: middle;
+}
+.rf-save-status.success { color: var(--rf-admin-success); }
+.rf-save-status.error { color: var(--rf-admin-error); }
+
+/* ===== Button (secondary) ===== */
+.rf-settings-page .button {
+    border: 1.5px solid var(--rf-admin-border) !important;
+    border-radius: 8px !important;
+    padding: 7px 18px !important;
+    font-size: 13px !important;
+    font-family: inherit !important;
+    background: #fff !important;
+    color: var(--rf-admin-text) !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    height: auto !important;
+    line-height: 1.5 !important;
+}
+.rf-settings-page .button:hover {
+    border-color: var(--rf-admin-primary) !important;
+    color: var(--rf-admin-primary) !important;
+    background: rgba(99,102,241,0.04) !important;
+}
+
+/* ===== Code blocks ===== */
+.rf-settings-page code {
+    background: #f1f5f9;
+    border: 1px solid var(--rf-admin-border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    direction: ltr;
+    display: inline-block;
+    color: var(--rf-admin-primary);
+    font-weight: 500;
+}
+
+/* ===== Provider Settings (SMS tab) ===== */
+.rf-provider-settings {
+    background: #f8fafc;
+    border: 1px solid var(--rf-admin-border);
+    border-radius: var(--rf-admin-radius);
+    padding: 4px 20px 16px;
+    margin: 16px 0;
+}
+.rf-provider-settings h3 {
+    font-size: 15px !important;
+    border-bottom-color: var(--rf-admin-border) !important;
+}
+
+/* ===== Preview Modal ===== */
+#rf-preview-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 100000;
+}
+.rf-preview-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15,23,42,0.5);
+    backdrop-filter: blur(4px);
+}
+.rf-preview-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--rf-admin-card);
+    padding: 28px;
+    border-radius: var(--rf-admin-radius);
+    min-width: 400px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    direction: rtl;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}
+.rf-preview-body {
+    white-space: pre-wrap;
+    background: #f1f5f9;
+    padding: 16px;
+    border-radius: 8px;
+    margin: 15px 0;
+    font-family: monospace;
+    direction: rtl;
+    font-size: 13px;
+    line-height: 1.7;
+    border: 1px solid var(--rf-admin-border);
+}
+
+/* ===== Dashboard Widget ===== */
+.rf-widget { direction: rtl; }
+
+/* ===== Color Picker ===== */
+.rf-settings-page .wp-picker-container { display: flex; align-items: center; gap: 8px; }
+.rf-settings-page .wp-color-result {
+    border-radius: 8px !important;
+    border: 2px solid var(--rf-admin-border) !important;
+    box-shadow: none !important;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 960px) {
+    .rf-admin-body { flex-direction: column; }
+    .rf-admin-sidebar {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+        position: static;
+        gap: 2px;
+    }
+    .rf-admin-nav-item { flex: 0 0 auto; padding: 8px 12px; font-size: 12.5px; }
+    .rf-admin-content { padding: 20px; }
+    .rf-settings-page .form-table th,
+    .rf-settings-page .form-table td {
+        display: block;
+        width: 100%;
+        padding: 6px 0;
+    }
+    .rf-settings-page .form-table th { padding-bottom: 2px; }
+    .rf-settings-page .regular-text { width: 100%; }
+    .rf-admin-header { margin-right: -10px; padding: 0 16px; }
+}
+
+@media (max-width: 600px) {
+    .rf-admin-nav-item .rf-nav-label { display: none; }
+    .rf-admin-nav-item { padding: 10px; }
+    .rf-admin-sidebar { justify-content: center; }
+}

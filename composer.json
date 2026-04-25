@@ -1,0 +1,14 @@
+{
+    "name": "robot-forooshande/robot-forooshande",
+    "description": "ربات فروشگاهی تلگرام و بله برای ووکامرس",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "autoload": {
+        "psr-4": {
+            "RobotForooshande\\": "includes/"
+        }
+    },
+    "require": {
+        "php": ">=8.0"
+    }
+}
