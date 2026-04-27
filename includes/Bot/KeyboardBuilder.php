@@ -69,15 +69,16 @@ class KeyboardBuilder {
 
     /**
      * Pagination buttons
+     * @param string $format sprintf-style format string with %d as page number placeholder (e.g. 'page:%d:cat:5')
      */
-    public static function pagination( int $current, int $total, string $prefix ): array {
+    public static function pagination( int $current, int $total, string $format ): array {
         $buttons = [];
         if ( $current > 1 ) {
-            $buttons[] = self::inlineButton( '◀️ قبلی', "{$prefix}:" . ( $current - 1 ) );
+            $buttons[] = self::inlineButton( '◀️ قبلی', sprintf( $format, $current - 1 ) );
         }
         $buttons[] = self::inlineButton( "📄 {$current}/{$total}", 'noop' );
         if ( $current < $total ) {
-            $buttons[] = self::inlineButton( '▶️ بعدی', "{$prefix}:" . ( $current + 1 ) );
+            $buttons[] = self::inlineButton( '▶️ بعدی', sprintf( $format, $current + 1 ) );
         }
         return $buttons;
     }

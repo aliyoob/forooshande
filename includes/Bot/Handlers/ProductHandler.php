@@ -518,8 +518,7 @@ class ProductHandler {
         }
 
         if ( $pages > 1 ) {
-            $paginationPrefix = str_replace( '%d', (string) $page, $pageFormat );
-            $rows[] = KeyboardBuilder::pagination( $page, $pages, $paginationPrefix );
+            $rows[] = KeyboardBuilder::pagination( $page, $pages, $pageFormat );
         }
 
         $rows[] = KeyboardBuilder::backButton( $backCallback );
