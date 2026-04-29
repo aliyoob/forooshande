@@ -28,14 +28,67 @@ class ProductHandler {
         $inStock    = $product->is_in_stock();
         $keyboard   = KeyboardBuilder::productActions( $productId, $inStock, $isVariable );
 
-        $imageId = $product->get_image_id();
-        $image   = $imageId ? wp_get_attachment_url( $imageId ) : null;
-
-        if ( $image ) {
-            $bot->sendPhoto( $chatId, $image, $message, $keyboard );
+        $imageId = (int) $product->get_image_id();
+        if ( $imageId ) {
+            $this->sendProductPhoto( $bot, $chatId, $imageId, $message, $keyboard );
         } else {
             $bot->sendMessage( $chatId, $message, $keyboard );
         }
+    }
+
+    /**
+     * Send a product image reliably with four tiers:
+     *  1. Cached file_id  — instant, no upload
+     *  2. Public URL      — original working approach; Bale/Telegram downloads it
+     *  3. Local file path — direct binary upload as fallback (JPEG converted if needed)
+     *  4. Text-only       — always gives the user something
+     */
+    private function sendProductPhoto( \RobotForooshande\Bot\BotCore $bot, int|string $chatId, int $imageId, string $caption, ?array $keyboard ): void {
+        $platform = $bot->getPlatform();
+        $metaKey  = "rf_file_id_{$platform}";
+
+        // Tier 1 — try cached file_id (zero-upload, fastest path)
+        $fileId = get_post_meta( $imageId, $metaKey, true );
+        if ( $fileId ) {
+            $result = $bot->sendPhoto( $chatId, $fileId, $caption, $keyboard );
+            if ( ! empty( $result['ok'] ) ) {
+                return;
+            }
+            // Stale file_id — clear and fall through.
+            delete_post_meta( $imageId, $metaKey );
+        }
+
+        // Tier 2 — send via public URL (original behaviour, works for WebP on Bale)
+        $url = wp_get_attachment_url( $imageId );
+        if ( $url ) {
+            $result = $bot->sendPhoto( $chatId, $url, $caption, $keyboard );
+            if ( ! empty( $result['ok'] ) ) {
+                // Cache the returned file_id so the next send skips the upload.
+                $photos = $result['result']['photo'] ?? [];
+                if ( ! empty( $photos ) ) {
+                    $best = end( $photos );
+                    update_post_meta( $imageId, $metaKey, $best['file_id'] );
+                }
+                return;
+            }
+        }
+
+        // Tier 3 — upload from local disk (converts WebP → JPEG automatically)
+        $localPath = get_attached_file( $imageId );
+        if ( $localPath && file_exists( $localPath ) ) {
+            $result = $bot->sendPhotoFile( $chatId, $localPath, $caption, $keyboard );
+            if ( ! empty( $result['ok'] ) ) {
+                $photos = $result['result']['photo'] ?? [];
+                if ( ! empty( $photos ) ) {
+                    $best = end( $photos );
+                    update_post_meta( $imageId, $metaKey, $best['file_id'] );
+                }
+                return;
+            }
+        }
+
+        // Tier 4 — text-only fallback so the user always gets a reply
+        $bot->sendMessage( $chatId, $caption, $keyboard );
     }
 
     public function handleCallback( array $ctx ): void {
@@ -58,12 +111,9 @@ class ProductHandler {
             return;
         }
 
-        // Re-read fresh state_data from DB (may have been updated by previous variation step)
-        global $wpdb;
-        $freshUser = $wpdb->get_row( $wpdb->prepare(
-            "SELECT state_data FROM {$wpdb->prefix}rf_bot_users WHERE id = %d", $ctx['bot_user']->id
-        ) );
-        $stateData = ! empty( $freshUser->state_data ) ? json_decode( $freshUser->state_data, true ) : [];
+        // $ctx['bot_user'] is always loaded fresh from DB at the start of each webhook request,
+        // so state_data is already up to date — no extra SELECT needed.
+        $stateData = ! empty( $ctx['bot_user']->state_data ) ? json_decode( $ctx['bot_user']->state_data, true ) : [];
         $selected  = $stateData['selected_attrs'] ?? [];
 
         if ( $attrIndex !== null && $attrValue !== null ) {

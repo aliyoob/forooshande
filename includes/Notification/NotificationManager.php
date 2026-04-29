@@ -242,12 +242,8 @@ class NotificationManager {
         $vars    = MessageTemplateEngine::productVars( $product );
         $message = MessageTemplateEngine::render( 'rf_msg_product_update', $vars );
 
-        $image = wp_get_attachment_url( $product->get_image_id() );
-        if ( $image ) {
-            $this->bot->sendPhoto( $channel_id, $image, $message );
-        } else {
-            $this->bot->sendMessage( $channel_id, $message );
-        }
+        $imageId = (int) $product->get_image_id();
+        $this->sendAttachmentPhoto( $channel_id, $imageId, $message );
     }
 
     /**
@@ -334,12 +330,8 @@ class NotificationManager {
             get_permalink( $postId )
         );
 
-        $thumbnail = get_the_post_thumbnail_url( $postId, 'large' );
-        if ( $thumbnail ) {
-            $this->bot->sendPhoto( $channel_id, $thumbnail, $message );
-        } else {
-            $this->bot->sendMessage( $channel_id, $message );
-        }
+        $thumbId = (int) get_post_thumbnail_id( $postId );
+        $this->sendAttachmentPhoto( $channel_id, $thumbId, $message );
     }
 
     /**
@@ -394,5 +386,58 @@ class NotificationManager {
      */
     private function parseAdminChatIds(): array {
         return array_filter( array_map( 'trim', preg_split( '/[\s,]+/', get_option( 'rf_admin_chat_ids', '' ) ) ) );
+    }
+
+    /**
+     * Send a WordPress attachment as a photo.
+     * Tries cached file_id → public URL → local file upload → text-only fallback.
+     */
+    private function sendAttachmentPhoto( int|string $chatId, int $imageId, string $caption ): void {
+        if ( ! $imageId ) {
+            $this->bot->sendMessage( $chatId, $caption );
+            return;
+        }
+
+        $platform = $this->bot->getPlatform();
+        $metaKey  = "rf_file_id_{$platform}";
+
+        // Tier 1 — cached file_id
+        $fileId = get_post_meta( $imageId, $metaKey, true );
+        if ( $fileId ) {
+            $result = $this->bot->sendPhoto( $chatId, $fileId, $caption );
+            if ( ! empty( $result['ok'] ) ) return;
+            delete_post_meta( $imageId, $metaKey );
+        }
+
+        // Tier 2 — public URL (original approach, supports WebP on Bale)
+        $url = wp_get_attachment_url( $imageId );
+        if ( $url ) {
+            $result = $this->bot->sendPhoto( $chatId, $url, $caption );
+            if ( ! empty( $result['ok'] ) ) {
+                $photos = $result['result']['photo'] ?? [];
+                if ( ! empty( $photos ) ) {
+                    $best = end( $photos );
+                    update_post_meta( $imageId, $metaKey, $best['file_id'] );
+                }
+                return;
+            }
+        }
+
+        // Tier 3 — local file upload (converts WebP → JPEG automatically)
+        $localPath = get_attached_file( $imageId );
+        if ( $localPath && file_exists( $localPath ) ) {
+            $result = $this->bot->sendPhotoFile( $chatId, $localPath, $caption );
+            if ( ! empty( $result['ok'] ) ) {
+                $photos = $result['result']['photo'] ?? [];
+                if ( ! empty( $photos ) ) {
+                    $best = end( $photos );
+                    update_post_meta( $imageId, $metaKey, $best['file_id'] );
+                }
+                return;
+            }
+        }
+
+        // Tier 4 — text-only fallback
+        $this->bot->sendMessage( $chatId, $caption );
     }
 }

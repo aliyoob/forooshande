@@ -136,7 +136,7 @@ class BotCore {
     private function request( string $method, array $params = [] ): array {
         $url      = $this->baseUrl . '/' . $method;
         $response = wp_remote_post( $url, [
-            'timeout' => 30,
+            'timeout' => 15,
             'body'    => $params,
         ] );
 
@@ -163,6 +163,120 @@ class BotCore {
         }
 
         return $result;
+    }
+
+    /**
+     * Upload a local image file directly via multipart/form-data (cURL).
+     * Avoids the platform's servers needing to fetch the image from our URL.
+     * WebP files are automatically converted to JPEG because Bale (and some
+     * Telegram clients) reject WebP uploads.
+     * Returns the same shape as sendPhoto() so callers can treat them identically.
+     */
+    public function sendPhotoFile( int|string $chatId, string $filePath, string $caption = '', ?array $replyMarkup = null, string $parseMode = 'HTML' ): array {
+        if ( ! function_exists( 'curl_init' ) ) {
+            Logger::warning( 'sendPhotoFile: cURL unavailable', [ 'file' => $filePath ] );
+            return [ 'ok' => false, 'error' => 'cURL not available' ];
+        }
+
+        if ( ! file_exists( $filePath ) || ! is_readable( $filePath ) ) {
+            Logger::warning( 'sendPhotoFile: file not found', [ 'file' => $filePath ] );
+            return [ 'ok' => false, 'error' => 'File not found' ];
+        }
+
+        // Convert WebP → JPEG so Bale and older clients accept the upload.
+        $uploadPath = $filePath;
+        $tempFile   = null;
+        if ( strtolower( pathinfo( $filePath, PATHINFO_EXTENSION ) ) === 'webp' ) {
+            $converted = $this->convertWebpToJpeg( $filePath );
+            if ( $converted ) {
+                $uploadPath = $converted;
+                $tempFile   = $converted;
+            }
+        }
+
+        $params = [
+            'chat_id'    => $chatId,
+            'photo'      => new \CURLFile( $uploadPath, 'image/jpeg', basename( $uploadPath ) ),
+            'caption'    => $caption,
+            'parse_mode' => $parseMode,
+        ];
+        if ( $replyMarkup ) {
+            $params['reply_markup'] = wp_json_encode( $replyMarkup );
+        }
+
+        $ch = curl_init( $this->baseUrl . '/sendPhoto' );
+        curl_setopt_array( $ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $params,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 30,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ] );
+
+        $body  = curl_exec( $ch );
+        $errno = curl_errno( $ch );
+        curl_close( $ch );
+
+        // Remove temp conversion file regardless of outcome.
+        if ( $tempFile && file_exists( $tempFile ) ) {
+            @unlink( $tempFile );
+        }
+
+        if ( $errno || $body === false ) {
+            Logger::error( 'sendPhotoFile cURL error', [ 'errno' => $errno, 'file' => $filePath ] );
+            return [ 'ok' => false, 'error' => "cURL error {$errno}" ];
+        }
+
+        $result = json_decode( $body, true );
+        if ( ! is_array( $result ) ) {
+            Logger::error( 'sendPhotoFile: invalid JSON response', [ 'body' => $body ] );
+            return [ 'ok' => false, 'error' => 'Invalid JSON response' ];
+        }
+
+        if ( empty( $result['ok'] ) ) {
+            Logger::warning( 'Bot API failed: sendPhotoFile', [
+                'description' => $result['description'] ?? 'Unknown error',
+                'file'        => $filePath,
+            ] );
+        }
+
+        return $result;
+    }
+
+    /**
+     * Convert a WebP image to a temporary JPEG file.
+     * Uses WordPress's WP_Image_Editor which tries both GD and Imagick automatically.
+     * Returns the temp file path on success, or null if conversion fails.
+     */
+    private function convertWebpToJpeg( string $webpPath ): ?string {
+        $editor = wp_get_image_editor( $webpPath );
+        if ( is_wp_error( $editor ) ) {
+            Logger::warning( 'convertWebpToJpeg: no image editor available', [
+                'file'  => $webpPath,
+                'error' => $editor->get_error_message(),
+            ] );
+            return null;
+        }
+
+        $tmpPath = sys_get_temp_dir() . '/rf_' . uniqid( '', true ) . '.jpg';
+        $saved   = $editor->save( $tmpPath, 'image/jpeg' );
+
+        if ( is_wp_error( $saved ) ) {
+            Logger::warning( 'convertWebpToJpeg: save failed', [
+                'file'  => $webpPath,
+                'error' => $saved->get_error_message(),
+            ] );
+            return null;
+        }
+
+        // WP_Image_Editor may adjust the path (e.g. add suffix), use the reported path.
+        $resultPath = $saved['path'] ?? $tmpPath;
+        if ( ! file_exists( $resultPath ) ) {
+            Logger::warning( 'convertWebpToJpeg: output file missing', [ 'expected' => $resultPath ] );
+            return null;
+        }
+
+        return $resultPath;
     }
 
     /**

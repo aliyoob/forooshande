@@ -27,6 +27,7 @@ class StateManager {
         ) );
 
         if ( ! $user ) {
+            $now = current_time( 'mysql' );
             $wpdb->insert( $this->table, [
                 'chat_id'    => $chatId,
                 'platform'   => $platform,
@@ -35,12 +36,24 @@ class StateManager {
                 'username'   => $from['username'] ?? null,
                 'is_admin'   => $is_admin,
                 'state'      => 'idle',
-                'created_at' => current_time( 'mysql' ),
+                'created_at' => $now,
             ], [ '%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s' ] );
 
-            $user = $wpdb->get_row( $wpdb->prepare(
-                "SELECT * FROM {$this->table} WHERE id = %d", $wpdb->insert_id
-            ) );
+            // Build the user object directly from known values to avoid an extra SELECT.
+            $user = (object) [
+                'id'         => $wpdb->insert_id,
+                'chat_id'    => $chatId,
+                'platform'   => $platform,
+                'first_name' => $from['first_name'] ?? null,
+                'last_name'  => $from['last_name'] ?? null,
+                'username'   => $from['username'] ?? null,
+                'is_admin'   => $is_admin,
+                'state'      => 'idle',
+                'state_data' => null,
+                'phone'      => null,
+                'user_id'    => null,
+                'created_at' => $now,
+            ];
         } else {
             // Update name/username if changed
             $updates = [];
@@ -64,9 +77,10 @@ class StateManager {
             }
             if ( ! empty( $updates ) ) {
                 $wpdb->update( $this->table, $updates, [ 'id' => $user->id ], $formats, [ '%d' ] );
-                $user = $wpdb->get_row( $wpdb->prepare(
-                    "SELECT * FROM {$this->table} WHERE id = %d", $user->id
-                ) );
+                // Apply changes directly to the existing object to avoid an extra SELECT.
+                foreach ( $updates as $col => $val ) {
+                    $user->$col = $val;
+                }
             }
         }
 

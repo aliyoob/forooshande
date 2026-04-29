@@ -56,8 +56,11 @@ class Router {
             'is_admin'  => $this->isAdmin( $botUser ),
         ];
 
-        // Acknowledge callback to dismiss loading spinner
-        $this->bot->answerCallbackQuery( $callback['id'] ?? '' );
+        // Dismiss the loading spinner immediately without blocking on the API response.
+        $this->bot->sendAsync( 'answerCallbackQuery', [
+            'callback_query_id' => $callback['id'] ?? '',
+            'text'              => '',
+        ] );
 
         match ( $action ) {
             'cat'           => ( new CategoryHandler() )->handleCallback( $ctx ),
