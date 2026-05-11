@@ -25,13 +25,14 @@ class PaymentHandler {
 
         $bot->sendMessage( $chatId, '⏳ در حال ایجاد سفارش...' );
 
-        $botUser = $ctx['bot_user'];
-        $address = [
+        $botUser  = $ctx['bot_user'];
+        $addrCity = (string) $cart->getMeta( (int) $botUser->id, 'addr_city', '' );
+        $address  = [
             'first_name' => $botUser->first_name ?? '',
             'last_name'  => $botUser->last_name ?? '',
             'phone'      => $botUser->phone ?? '',
             'address'    => $botUser->address ?? '',
-            'city'       => '',
+            'city'       => $addrCity,
             'province'   => '',
             'postcode'   => '',
         ];
@@ -42,6 +43,7 @@ class PaymentHandler {
         }
 
         $order->set_payment_method( $gatewayId );
+        $order->calculate_totals();
         $order->save();
 
         // Generate payment link
@@ -91,12 +93,13 @@ class PaymentHandler {
         $bot->sendMessage( $chatId, '⏳ در حال ایجاد سفارش...' );
 
         $botUser = $ctx['bot_user'];
-        $address = [
+        $addrCity = (string) $cart->getMeta( (int) $botUser->id, 'addr_city', '' );
+        $address  = [
             'first_name' => $botUser->first_name ?? '',
             'last_name'  => $botUser->last_name ?? '',
             'phone'      => $botUser->phone ?? '',
             'address'    => $botUser->address ?? '',
-            'city'       => '',
+            'city'       => $addrCity,
             'province'   => '',
             'postcode'   => '',
         ];
@@ -108,6 +111,7 @@ class PaymentHandler {
 
         $order->set_payment_method( 'cod' );
         $order->set_payment_method_title( 'پرداخت در محل' );
+        $order->calculate_totals();
         $order->save();
 
         $cart->clearCart( $botUserId );

@@ -3,34 +3,64 @@ namespace RobotForooshande\WooCommerce;
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
+/**
+ * Custom shipping manager — reads methods defined in the plugin settings.
+ * No longer relies on WooCommerce shipping zones so results are consistent
+ * regardless of zone configuration.
+ *
+ * Each method stored in rf_custom_shipping_methods has the shape:
+ *   [ 'id' => string, 'title' => string, 'cost' => float ]
+ */
 class ShippingManager {
 
-    public static function getAvailableMethods( array $address ): array {
-        if ( ! function_exists( 'WC' ) ) return [];
-
-        $shipping_zone = \WC_Shipping_Zones::get_zone_matching_package( [
-            'destination' => [
-                'country'  => 'IR',
-                'state'    => $address['province'] ?? '',
-                'postcode' => $address['postcode'] ?? '',
-                'city'     => $address['city'] ?? '',
-            ],
-        ] );
+    /**
+     * Return all active custom shipping methods.
+     * The $address and $cartItems params are kept for API compatibility but are
+     * not used (custom methods are global — no zone filtering).
+     *
+     * @param array $address    (unused, kept for interface compatibility)
+     * @param array $cartItems  (unused, kept for interface compatibility)
+     * @return array<array{id:string,title:string,cost:float}>
+     */
+    public static function getAvailableMethods( array $address = [], array $cartItems = [] ): array {
+        $raw = get_option( 'rf_custom_shipping_methods', [] );
+        if ( ! is_array( $raw ) ) {
+            return [];
+        }
 
         $methods = [];
-        foreach ( $shipping_zone->get_shipping_methods( true ) as $method ) {
+        foreach ( $raw as $i => $entry ) {
+            if ( empty( $entry['title'] ) ) {
+                continue;
+            }
             $methods[] = [
-                'id'    => $method->get_rate_id(),
-                'title' => $method->get_title(),
-                'cost'  => $method->get_option( 'cost', 0 ),
+                'id'    => 'custom_' . $i,
+                'title' => sanitize_text_field( $entry['title'] ),
+                'cost'  => (float) ( $entry['cost'] ?? 0 ),
             ];
         }
 
         return $methods;
     }
 
-    public static function calculateShipping( \WC_Order $order ): float {
-        $order->calculate_shipping();
-        return (float) $order->get_shipping_total();
+    /**
+     * Persist custom shipping methods array to options.
+     * Called from the admin AJAX handler.
+     *
+     * @param list<array{title:string,cost:float|int}> $methods
+     */
+    public static function saveMethods( array $methods ): void {
+        $clean = [];
+        foreach ( $methods as $m ) {
+            $title = sanitize_text_field( $m['title'] ?? '' );
+            if ( $title === '' ) {
+                continue;
+            }
+            $clean[] = [
+                'title' => $title,
+                'cost'  => (float) ( $m['cost'] ?? 0 ),
+            ];
+        }
+        update_option( 'rf_custom_shipping_methods', $clean, false );
     }
 }

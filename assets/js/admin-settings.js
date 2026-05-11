@@ -212,6 +212,79 @@
 
     $(document).ready(function () {
         rfAdmin.init();
+        rfAdmin.initShipping();
     });
+
+    // Shipping methods manager (tab-shipping.php)
+    rfAdmin.initShipping = function () {
+        if ( ! $('#rf-shipping-table').length ) return;
+
+        // Add new row
+        $(document).on('click', '#rf-add-shipping-row', function () {
+            $('.rf-shipping-empty-row').remove();
+            const idx = $('#rf-shipping-rows tr').length;
+            const row = `<tr class="rf-shipping-row" data-index="${idx}">
+                <td class="rf-row-handle" style="cursor:grab;color:#94a3b8;text-align:center;">☰</td>
+                <td><input type="text" class="rf-shipping-title regular-text" placeholder="مثال: پیک موتوری" dir="rtl"></td>
+                <td>
+                    <input type="number" class="rf-shipping-cost small-text" value="0" min="0" step="1000" placeholder="0" style="width:140px;">
+                    <span style="font-size:11px;color:#64748b;margin-right:4px;">تومان</span>
+                </td>
+                <td>
+                    <button type="button" class="button rf-remove-shipping-row" title="حذف">
+                        <span class="dashicons dashicons-trash"></span>
+                    </button>
+                </td>
+            </tr>`;
+            $('#rf-shipping-rows').append(row);
+            $('#rf-shipping-rows .rf-shipping-title').last().focus();
+        });
+
+        // Remove row
+        $(document).on('click', '.rf-remove-shipping-row', function () {
+            $(this).closest('tr').remove();
+            if ( ! $('#rf-shipping-rows tr').length ) {
+                $('#rf-shipping-rows').append(
+                    '<tr class="rf-shipping-empty-row"><td colspan="4" style="text-align:center;color:#94a3b8;padding:28px;">هیچ روش ارسالی تعریف نشده. از دکمه زیر استفاده کنید.</td></tr>'
+                );
+            }
+        });
+
+        // Save shipping methods
+        $(document).on('click', '#rf-save-shipping', function () {
+            const $btn    = $(this);
+            const $status = $('#rf-shipping-save-status');
+            const methods = [];
+
+            $('#rf-shipping-rows tr.rf-shipping-row').each(function () {
+                const title = $(this).find('.rf-shipping-title').val().trim();
+                const cost  = parseFloat( $(this).find('.rf-shipping-cost').val() ) || 0;
+                if ( title ) {
+                    methods.push({ title: title, cost: cost });
+                }
+            });
+
+            $btn.prop('disabled', true);
+            $status.text('⏳ در حال ذخیره...').css('color', '#64748b');
+
+            $.post(rfSettings.ajaxUrl, {
+                action:    'rf_save_shipping_methods',
+                methods:   JSON.stringify(methods),
+                _wpnonce:  rfSettings.nonce
+            }, function (res) {
+                $btn.prop('disabled', false);
+                if (res.success) {
+                    $status.text('✅ ذخیره شد').css('color', '#10b981');
+                } else {
+                    $status.text('❌ خطا در ذخیره').css('color', '#ef4444');
+                }
+                setTimeout(() => $status.text(''), 3000);
+            }).fail(function () {
+                $btn.prop('disabled', false);
+                $status.text('❌ خطای شبکه').css('color', '#ef4444');
+                setTimeout(() => $status.text(''), 3000);
+            });
+        });
+    };
 
 })(jQuery);

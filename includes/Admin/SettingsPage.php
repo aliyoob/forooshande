@@ -12,6 +12,7 @@ class SettingsPage {
         $this->tabs = [
             'general'       => 'عمومی',
             'bot'           => 'ربات',
+            'shipping'      => 'ارسال',
             'notifications' => 'اعلان‌ها',
             'messages'      => 'پیام‌ها',
             'payment'       => 'پرداخت',
@@ -25,6 +26,7 @@ class SettingsPage {
             'notifications' => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
             'messages'      => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
             'payment'       => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>',
+            'shipping'      => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',
             'sms'           => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>',
             'loginpage'     => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>',
             'advanced'      => '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
@@ -279,5 +281,24 @@ class SettingsPage {
         $keys = array_unique( $keys );
 
         wp_send_json_success( [ 'keys' => $keys ] );
+    }
+
+    /**
+     * AJAX: Save custom shipping methods
+     */
+    public static function ajax_save_shipping(): void {
+        check_ajax_referer( 'rf_admin_nonce', '_wpnonce' );
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'message' => 'دسترسی ندارید.' ] );
+        }
+
+        $raw = isset( $_POST['methods'] ) ? wp_unslash( $_POST['methods'] ) : '[]';
+        $methods = json_decode( $raw, true );
+        if ( ! is_array( $methods ) ) {
+            wp_send_json_error( [ 'message' => 'داده نامعتبر.' ] );
+        }
+
+        \RobotForooshande\WooCommerce\ShippingManager::saveMethods( $methods );
+        wp_send_json_success();
     }
 }

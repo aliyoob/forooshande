@@ -84,6 +84,7 @@ class CartSync {
     public function clearCart( int $botUserId ): void {
         global $wpdb;
         $wpdb->delete( $this->table, [ 'bot_user_id' => $botUserId ], [ '%d' ] );
+        $this->clearMeta( $botUserId );
     }
 
     public function getCartTotal( int $botUserId ): float {
@@ -118,6 +119,33 @@ class CartSync {
 
     public function setItemQuantity( int $cartItemId, int $quantity ): bool {
         return $this->updateQuantity( $cartItemId, $quantity );
+    }
+
+    public function setMeta( int $botUserId, string $key, $value ): void {
+        set_transient( "rf_cart_meta_{$botUserId}_{$key}", $value, DAY_IN_SECONDS );
+    }
+
+    public function getMeta( int $botUserId, string $key, $default = null ) {
+        $value = get_transient( "rf_cart_meta_{$botUserId}_{$key}" );
+        return $value !== false ? $value : $default;
+    }
+
+    public function clearMeta( int $botUserId ): void {
+        $keys = [
+            'shipping_method',
+            'shipping_rate_id',
+            'shipping_title',
+            'shipping_cost',
+            'order_note',
+            'checkout_cust_name',
+        ];
+        foreach ( $keys as $key ) {
+            delete_transient( "rf_cart_meta_{$botUserId}_{$key}" );
+        }
+    }
+
+    public function deleteMeta( int $botUserId, string $key ): void {
+        delete_transient( "rf_cart_meta_{$botUserId}_{$key}" );
     }
 
     public function setCoupon( int $botUserId, string $couponCode ): void {
@@ -208,9 +236,15 @@ class CartSync {
             $this->setCoupon( $botUserId, '' );
         }
 
+        // Billing & shipping name: prefer the checkout-collected name over bot account name.
+        $custName  = (string) $this->getMeta( $botUserId, 'checkout_cust_name', '' );
+        $nameParts = $custName !== '' ? explode( ' ', $custName, 2 ) : [];
+        $firstName = $nameParts[0] ?? ( $address['first_name'] ?? '' );
+        $lastName  = $nameParts[1] ?? ( $address['last_name']  ?? '' );
+
         // Set addresses
-        $order->set_billing_first_name( $address['first_name'] ?? '' );
-        $order->set_billing_last_name( $address['last_name'] ?? '' );
+        $order->set_billing_first_name( $firstName );
+        $order->set_billing_last_name( $lastName );
         $order->set_billing_phone( $address['phone'] ?? '' );
         $order->set_billing_address_1( $address['address'] ?? '' );
         $order->set_billing_city( $address['city'] ?? '' );
@@ -218,16 +252,46 @@ class CartSync {
         $order->set_billing_postcode( $address['postcode'] ?? '' );
         $order->set_billing_country( 'IR' );
 
-        $order->set_shipping_first_name( $address['first_name'] ?? '' );
-        $order->set_shipping_last_name( $address['last_name'] ?? '' );
+        $order->set_shipping_first_name( $firstName );
+        $order->set_shipping_last_name( $lastName );
         $order->set_shipping_address_1( $address['address'] ?? '' );
         $order->set_shipping_city( $address['city'] ?? '' );
         $order->set_shipping_state( $address['province'] ?? '' );
         $order->set_shipping_postcode( $address['postcode'] ?? '' );
         $order->set_shipping_country( 'IR' );
 
-        // Calculate shipping
-        $order->calculate_shipping();
+        // Apply selected shipping method as a proper order line item.
+        $shippingRateId     = $this->getMeta( $botUserId, 'shipping_rate_id', null );
+        $shippingTitle      = $this->getMeta( $botUserId, 'shipping_title',   null );
+        $shippingCostStored = $this->getMeta( $botUserId, 'shipping_cost',    null );
+
+        if ( $shippingRateId !== null && $shippingTitle !== null && $shippingCostStored !== null ) {
+            $shippingItem = new \WC_Order_Item_Shipping();
+            $shippingItem->set_method_title( (string) $shippingTitle );
+            $shippingItem->set_method_id( (string) $shippingRateId );
+            $shippingItem->set_total( (float) $shippingCostStored );
+            $order->add_item( $shippingItem );
+        } else {
+            // Fallback: no method explicitly selected; use first available custom method.
+            $shippingMethods = \RobotForooshande\WooCommerce\ShippingManager::getAvailableMethods();
+            if ( ! empty( $shippingMethods ) ) {
+                $shippingIdx  = $this->getMeta( $botUserId, 'shipping_method', null );
+                $idx          = ( $shippingIdx !== null ) ? (int) $shippingIdx : 0;
+                $shippingData = $shippingMethods[ $idx ] ?? $shippingMethods[0];
+                $shippingItem = new \WC_Order_Item_Shipping();
+                $shippingItem->set_method_title( $shippingData['title'] );
+                $shippingItem->set_method_id( $shippingData['id'] );
+                $shippingItem->set_total( (float) $shippingData['cost'] );
+                $order->add_item( $shippingItem );
+            }
+        }
+
+        // Apply order note if set
+        $orderNote = $this->getMeta( $botUserId, 'order_note', '' );
+        if ( $orderNote ) {
+            $order->set_customer_note( $orderNote );
+        }
+
         $order->calculate_totals();
 
         // Mark as bot order

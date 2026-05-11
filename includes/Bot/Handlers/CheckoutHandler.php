@@ -57,12 +57,43 @@ class CheckoutHandler {
             }
         }
 
-        // Check if we have address
-        $address = $ctx['bot_user']->address ?? '';
+        // Step 1: collect customer name
+        $custName = $cart->getMeta( $botUserId, 'checkout_cust_name', null );
+        if ( $custName === null ) {
+            $ctx['state']->setState( $botUserId, 'awaiting_checkout_name' );
+            $bot->sendMessage( $chatId, "👤 لطفاً نام و نام‌خانوادگی خود را وارد کنید:" );
+            return;
+        }
 
+        // Step 2: collect address
+        $address = $ctx['bot_user']->address ?? '';
         if ( empty( $address ) ) {
             $ctx['state']->setState( $botUserId, 'awaiting_checkout_address' );
             $bot->sendMessage( $chatId, "📍 لطفاً آدرس پستی خود را وارد کنید:\n\n(شامل استان، شهر، آدرس کامل و کد پستی)" );
+            return;
+        }
+
+        $this->showCheckoutSummary( $ctx );
+    }
+
+    public function receiveName( array $ctx, string $name ): void {
+        $botUserId = $ctx['bot_user']->id;
+        $name      = sanitize_text_field( $name );
+
+        if ( mb_strlen( $name ) < 2 ) {
+            $ctx['bot']->sendMessage( $ctx['chat_id'], '❌ نام وارد‌شده خیلی کوتاه است. لطفاً نام کامل خود را وارد کنید:' );
+            return;
+        }
+
+        $cart = new CartSync();
+        $cart->setMeta( $botUserId, 'checkout_cust_name', $name );
+        $ctx['state']->clearState( $botUserId );
+
+        // Immediately check address
+        $address = $ctx['bot_user']->address ?? '';
+        if ( empty( $address ) ) {
+            $ctx['state']->setState( $botUserId, 'awaiting_checkout_address' );
+            $ctx['bot']->sendMessage( $ctx['chat_id'], "📍 لطفاً آدرس پستی خود را وارد کنید:\n\n(شامل استان، شهر، آدرس کامل و کد پستی)" );
             return;
         }
 
@@ -73,7 +104,6 @@ class CheckoutHandler {
         global $wpdb;
         $botUserId = $ctx['bot_user']->id;
 
-        // Save address
         $wpdb->update(
             $wpdb->prefix . 'rf_bot_users',
             [ 'address' => sanitize_textarea_field( $address ) ],
@@ -83,8 +113,15 @@ class CheckoutHandler {
         );
 
         $ctx['bot_user']->address = $address;
-        $ctx['state']->clearState( $botUserId );
 
+        // Clear shipping selection so user re-picks after address change
+        $cart = new CartSync();
+        $cart->deleteMeta( $botUserId, 'shipping_rate_id' );
+        $cart->deleteMeta( $botUserId, 'shipping_title' );
+        $cart->deleteMeta( $botUserId, 'shipping_cost' );
+        $cart->deleteMeta( $botUserId, 'shipping_method' );
+
+        $ctx['state']->clearState( $botUserId );
         $this->showCheckoutSummary( $ctx );
     }
 
@@ -95,10 +132,12 @@ class CheckoutHandler {
 
         $cart  = new CartSync();
         $items = $cart->getItems( $botUserId );
-        $name  = $ctx['bot_user']->first_name ?? '';
 
-        $text = "📋 خلاصه سفارش:\n━━━━━━━━━━━━━━\n";
-        $text .= "👤 {$name}\n";
+        // Customer name from collected meta (not from bot account)
+        $custName = (string) $cart->getMeta( $botUserId, 'checkout_cust_name', $ctx['bot_user']->first_name ?? '' );
+
+        $text  = "📋 خلاصه سفارش:\n━━━━━━━━━━━━━━\n";
+        $text .= "👤 {$custName}\n";
         $text .= "📍 " . ( $ctx['bot_user']->address ?? 'ثبت نشده' ) . "\n";
         $text .= "━━━━━━━━━━━━━━\n";
 
@@ -113,62 +152,100 @@ class CheckoutHandler {
                    . " = " . PriceFormatter::format( (string) $lineTotal ) . "\n";
         }
 
-        $coupon   = $cart->getCoupon( $botUserId );
-        $discount = 0;
+        $coupon = $cart->getCoupon( $botUserId );
         if ( $coupon ) {
             $text .= "\n🏷 کد تخفیف: {$coupon}\n";
         }
 
-        $text .= "\n━━━━━━━━━━━━━━\n";
-        $text .= "💰 جمع: " . PriceFormatter::format( (string) $subtotal ) . "\n";
+        // Custom shipping methods (no WooCommerce zone logic)
+        $methods        = ShippingManager::getAvailableMethods();
+        $selectedRateId = $cart->getMeta( $botUserId, 'shipping_rate_id', null );
 
-        // Shipping info
-        $userAddress = [
-            'province' => '',
-            'city'     => '',
-            'postcode' => '',
-        ];
-        $methods = ShippingManager::getAvailableMethods( $userAddress );
-        if ( ! empty( $methods ) ) {
+        // Auto-select and persist when only one option exists
+        if ( $selectedRateId === null && count( $methods ) === 1 ) {
+            $m = $methods[0];
+            $cart->setMeta( $botUserId, 'shipping_rate_id', $m['id'] );
+            $cart->setMeta( $botUserId, 'shipping_title',   $m['title'] );
+            $cart->setMeta( $botUserId, 'shipping_cost',    $m['cost'] );
+            $selectedRateId = $m['id'];
+        }
+
+        $shippingCost = 0;
+        $shippingRows = [];
+        foreach ( $methods as $idx => $method ) {
+            $isSelected = ( $selectedRateId !== null && $method['id'] === $selectedRateId );
+            if ( $isSelected ) {
+                $shippingCost = (float) $method['cost'];
+            }
+            $costLabel      = $method['cost'] > 0 ? PriceFormatter::format( (string) $method['cost'] ) : 'رایگان';
+            $prefix         = $isSelected ? '✅ ' : '📦 ';
+            $checkmark      = $isSelected ? ' ✅' : '';
+            $shippingRows[] = [
+                'idx'       => $idx,
+                'title'     => $method['title'],
+                'costLabel' => $costLabel,
+                'prefix'    => $prefix,
+                'checkmark' => $checkmark,
+            ];
+        }
+
+        $total = $subtotal + $shippingCost;
+
+        $text .= "\n━━━━━━━━━━━━━━\n";
+        $text .= "💰 جمع کالا: " . PriceFormatter::format( (string) $subtotal ) . "\n";
+
+        if ( ! empty( $shippingRows ) ) {
             $text .= "\n📦 روش ارسال:\n";
-            $shippingRows = [];
-            foreach ( $methods as $idx => $method ) {
-                $cost = $method['cost'] > 0 ? PriceFormatter::format( (string) $method['cost'] ) : 'رایگان';
-                $text .= "  {$method['title']} - {$cost}\n";
-                $shippingRows[] = KeyboardBuilder::inlineButton(
-                    "📦 {$method['title']}",
-                    "shipping:{$idx}"
-                );
+            foreach ( $shippingRows as $row ) {
+                $text .= "  {$row['prefix']}{$row['title']} — {$row['costLabel']}{$row['checkmark']}\n";
             }
         }
 
-        // Payment methods
-        $gateways = PaymentGatewayBridge::getActiveGateways();
-        $rows     = [];
+        if ( $shippingCost > 0 ) {
+            $text .= "\n📦 هزینه ارسال: " . PriceFormatter::format( (string) $shippingCost ) . "\n";
+        }
+        $text .= "💳 مجموع قابل پرداخت: " . PriceFormatter::format( (string) $total ) . "\n";
 
-        if ( ! empty( $shippingRows ?? [] ) ) {
-            foreach ( array_chunk( $shippingRows, 2 ) as $chunk ) {
+        // Build keyboard
+        $rows = [];
+
+        // Shipping method buttons
+        if ( ! empty( $shippingRows ) ) {
+            $buttons = [];
+            foreach ( $shippingRows as $row ) {
+                $buttons[] = KeyboardBuilder::inlineButton(
+                    "{$row['prefix']}{$row['title']}",
+                    "shipping:{$row['idx']}"
+                );
+            }
+            foreach ( array_chunk( $buttons, 2 ) as $chunk ) {
                 $rows[] = $chunk;
             }
         }
 
-        $payRow = [];
-        foreach ( $gateways as $id => $gateway ) {
-            $title = is_object( $gateway ) ? $gateway->get_title() : (string) $gateway;
-            if ( $id === 'cod' ) {
-                $payRow[] = KeyboardBuilder::inlineButton( "💵 {$title}", 'pay_cod' );
-            } else {
-                $payRow[] = KeyboardBuilder::inlineButton( "💳 {$title}", "pay_online:{$id}" );
+        // Payment buttons (only show if a shipping method is selected or no methods defined)
+        $shippingReady = empty( $methods ) || $selectedRateId !== null;
+        if ( $shippingReady ) {
+            $gateways = PaymentGatewayBridge::getActiveGateways();
+            $payRow   = [];
+            foreach ( $gateways as $id => $gateway ) {
+                $title = is_object( $gateway ) ? $gateway->get_title() : (string) $gateway;
+                if ( $id === 'cod' ) {
+                    $payRow[] = KeyboardBuilder::inlineButton( "💵 {$title}", 'pay_cod' );
+                } else {
+                    $payRow[] = KeyboardBuilder::inlineButton( "💳 {$title}", "pay_online:{$id}" );
+                }
             }
-        }
-        if ( ! empty( $payRow ) ) {
             foreach ( array_chunk( $payRow, 2 ) as $chunk ) {
                 $rows[] = $chunk;
             }
         }
 
         $rows[] = [
-            KeyboardBuilder::inlineButton( '📝 ویرایش آدرس', 'edit_checkout_address' ),
+            KeyboardBuilder::inlineButton( '✏️ ویرایش نام',   'edit_checkout_name' ),
+            KeyboardBuilder::inlineButton( '📍 ویرایش آدرس', 'edit_checkout_address' ),
+        ];
+        $rows[] = [
             KeyboardBuilder::inlineButton( '📝 یادداشت', 'order_note' ),
         ];
         $rows[] = KeyboardBuilder::backButton( 'cart_refresh' );
@@ -179,6 +256,11 @@ class CheckoutHandler {
         } else {
             $bot->sendMessage( $chatId, $text, KeyboardBuilder::inline( $rows ) );
         }
+    }
+
+    public function editName( array $ctx ): void {
+        $ctx['state']->setState( $ctx['bot_user']->id, 'awaiting_checkout_name' );
+        $ctx['bot']->sendMessage( $ctx['chat_id'], '👤 نام و نام‌خانوادگی جدید خود را وارد کنید:' );
     }
 
     public function editAddress( array $ctx ): void {
@@ -200,10 +282,20 @@ class CheckoutHandler {
     }
 
     public function selectShipping( array $ctx ): void {
-        $index = (int) ( $ctx['parts'][1] ?? 0 );
-        $cart  = new CartSync();
-        $cart->setMeta( $ctx['bot_user']->id, 'shipping_method', $index );
-        $ctx['bot']->sendMessage( $ctx['chat_id'], '✅ روش ارسال انتخاب شد.' );
+        $index     = (int) ( $ctx['parts'][1] ?? 0 );
+        $cart      = new CartSync();
+        $botUserId = $ctx['bot_user']->id;
+
+        $methods = ShippingManager::getAvailableMethods();
+
+        if ( isset( $methods[ $index ] ) ) {
+            $selected = $methods[ $index ];
+            $cart->setMeta( $botUserId, 'shipping_method',  $index );
+            $cart->setMeta( $botUserId, 'shipping_rate_id', $selected['id'] );
+            $cart->setMeta( $botUserId, 'shipping_title',   $selected['title'] );
+            $cart->setMeta( $botUserId, 'shipping_cost',    $selected['cost'] );
+        }
+
         $this->showCheckoutSummary( $ctx );
     }
 }

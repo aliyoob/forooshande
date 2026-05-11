@@ -55,6 +55,11 @@ final class Plugin {
         // Auto-login for bot order payment pages
         add_action( 'template_redirect', [ $this, 'auto_login_bot_order_pay' ] );
 
+        // Cart sync for bot order payment pages: populate WC session cart + suppress
+        // empty-cart redirects that some themes/plugins add on the checkout page.
+        add_action( 'wp', [ $this, 'restore_bot_order_cart' ] );
+        add_filter( 'woocommerce_checkout_redirect_empty_cart', [ $this, 'no_redirect_for_bot_order_pay' ] );
+
         // Enqueue admin assets
         add_action( 'admin_enqueue_scripts', [ $this, 'admin_assets' ] );
 
@@ -71,9 +76,18 @@ final class Plugin {
         if ( empty( $token ) ) return;
 
         register_rest_route( 'robot-forooshande/v1', '/webhook/(?P<hash>[a-f0-9]{32})', [
-            'methods'             => 'POST',
-            'callback'            => [ new Bot\WebhookHandler(), 'handle' ],
-            'permission_callback' => '__return_true',
+            [
+                'methods'             => 'POST',
+                'callback'            => [ new Bot\WebhookHandler(), 'handle' ],
+                'permission_callback' => '__return_true',
+            ],
+            [
+                'methods'             => 'GET',
+                'callback'            => static function () {
+                    return new \WP_REST_Response( [ 'ok' => true, 'status' => 'webhook active' ], 200 );
+                },
+                'permission_callback' => '__return_true',
+            ],
         ] );
     }
 
@@ -121,7 +135,8 @@ final class Plugin {
             'rf_clear_logs'         => [ Admin\SettingsPage::class, 'ajax_clear_logs' ],
             'rf_export_settings'    => [ Admin\SettingsPage::class, 'ajax_export_settings' ],
             'rf_import_settings'    => [ Admin\SettingsPage::class, 'ajax_import_settings' ],
-            'rf_get_user_meta_keys' => [ Admin\SettingsPage::class, 'ajax_get_user_meta_keys' ],
+            'rf_get_user_meta_keys'    => [ Admin\SettingsPage::class, 'ajax_get_user_meta_keys' ],
+            'rf_save_shipping_methods' => [ Admin\SettingsPage::class, 'ajax_save_shipping' ],
         ];
 
         foreach ( $ajax_actions as $action => $callback ) {
@@ -236,8 +251,62 @@ final class Plugin {
         wp_set_auth_cookie( $customer_id, false, is_ssl() );
 
         // Redirect to reload the page as the logged-in user
-        wp_safe_redirect( add_query_arg( [] ) );
+        wp_safe_redirect( esc_url_raw( add_query_arg( [] ) ) );
         exit;
+    }
+
+    /**
+     * Populate the WC session cart from a bot order when the order-pay page is loaded.
+     * This prevents themes or plugins that check WC()->cart->is_empty() from
+     * redirecting the user away from the order payment page.
+     */
+    public function restore_bot_order_cart(): void {
+        if ( ! function_exists( 'is_wc_endpoint_url' ) ) return;
+        if ( ! is_wc_endpoint_url( 'order-pay' ) ) return;
+        if ( ! WC()->cart || ! WC()->cart->is_empty() ) return;
+
+        $order_id  = absint( get_query_var( 'order-pay' ) );
+        $order_key = isset( $_GET['key'] ) ? sanitize_text_field( wp_unslash( $_GET['key'] ) ) : '';
+
+        if ( ! $order_id || ! $order_key ) return;
+
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) return;
+        if ( $order->get_order_key() !== $order_key ) return;
+        if ( ! $order->get_meta( '_rf_from_bot' ) ) return;
+
+        foreach ( $order->get_items() as $item ) {
+            /** @var \WC_Order_Item_Product $item */
+            $product_id   = $item->get_product_id();
+            $variation_id = $item->get_variation_id();
+            $quantity     = $item->get_quantity();
+            if ( $product_id ) {
+                WC()->cart->add_to_cart( $product_id, $quantity, $variation_id ?: 0 );
+            }
+        }
+
+        // Store the order id in session so WooCommerce recognises payment is in progress.
+        if ( WC()->session ) {
+            WC()->session->set( 'order_awaiting_payment', $order_id );
+        }
+    }
+
+    /**
+     * Prevent WooCommerce from redirecting to the cart when the cart is empty
+     * on the order-pay page for a bot-created order.
+     */
+    public function no_redirect_for_bot_order_pay( bool $should_redirect ): bool {
+        if ( ! function_exists( 'is_wc_endpoint_url' ) ) return $should_redirect;
+        if ( ! is_wc_endpoint_url( 'order-pay' ) ) return $should_redirect;
+
+        $order_id = absint( get_query_var( 'order-pay' ) );
+        if ( ! $order_id ) return $should_redirect;
+
+        $order = wc_get_order( $order_id );
+        if ( $order && $order->get_meta( '_rf_from_bot' ) ) {
+            return false;
+        }
+        return $should_redirect;
     }
 
     public function product_deeplink_panel(): void {

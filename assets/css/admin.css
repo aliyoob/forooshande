@@ -79,6 +79,76 @@
     z-index: 1;
 }
 
+/* ===== Shipping Table ===== */
+.rf-shipping-header {
+    margin-bottom: 20px;
+}
+.rf-shipping-header h3 {
+    margin: 0 0 6px 0 !important;
+    border: none !important;
+    padding: 0 !important;
+}
+.rf-shipping-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-top: 4px;
+    border: 1.5px solid var(--rf-admin-border);
+    border-radius: var(--rf-admin-radius);
+    overflow: hidden;
+}
+.rf-shipping-table thead tr {
+    background: #f8fafc;
+}
+.rf-shipping-table th,
+.rf-shipping-table td {
+    padding: 11px 14px;
+    text-align: right;
+    font-size: 13px;
+    border-bottom: 1px solid var(--rf-admin-border);
+}
+.rf-shipping-table thead th {
+    font-weight: 600;
+    color: var(--rf-admin-text-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.rf-shipping-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.rf-shipping-table tbody tr:hover {
+    background: #f8faff;
+}
+.rf-shipping-table .rf-remove-shipping-row {
+    background: transparent;
+    border-color: transparent;
+    color: var(--rf-admin-error);
+    box-shadow: none;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.15s;
+}
+.rf-shipping-table .rf-remove-shipping-row:hover {
+    background: rgba(239,68,68,0.08);
+}
+.rf-shipping-table input[type="text"],
+.rf-shipping-table input[type="number"] {
+    border: 1.5px solid var(--rf-admin-border);
+    border-radius: 7px;
+    padding: 7px 12px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #f8fafc;
+    color: var(--rf-admin-text);
+    transition: border-color 0.2s;
+}
+.rf-shipping-table input:focus {
+    border-color: var(--rf-admin-primary);
+    outline: none;
+    background: #fff;
+}
+
 /* ===== Sidebar ===== */
 .rf-admin-sidebar {
     width: var(--rf-admin-sidebar-w);

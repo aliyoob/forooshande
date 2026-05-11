@@ -3,7 +3,7 @@
  * Plugin Name: ربات فروشنده
  * Plugin URI: https://example.com/robot-forooshande
  * Description: ربات فروشگاهی تلگرام و بله برای ووکامرس - خرید و مدیریت کامل فروشگاه از طریق ربات
- * Version: 1.0.0
+ * Version: 1.3.0
  * Author: Robot Forooshande
  * Author URI: https://example.com
  * License: GPL v2 or later
@@ -28,7 +28,7 @@ add_action( 'before_woocommerce_init', function () {
     }
 } );
 
-define( 'RF_VERSION', '1.0.0' );
+define( 'RF_VERSION', '1.3.0' );
 define( 'RF_PLUGIN_FILE', __FILE__ );
 define( 'RF_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'RF_PLUGIN_URL', plugin_dir_url( __FILE__ ) );

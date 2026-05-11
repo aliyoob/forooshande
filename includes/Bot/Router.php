@@ -76,6 +76,7 @@ class Router {
             'cart_qty'      => ( new CartHandler() )->setQuantity( $ctx ),
             'coupon_input'  => ( new CartHandler() )->promptCoupon( $ctx ),
             'checkout'      => ( new CheckoutHandler() )->startCheckout( $ctx ),
+            'edit_checkout_name'    => ( new CheckoutHandler() )->editName( $ctx ),
             'edit_checkout_address' => ( new CheckoutHandler() )->editAddress( $ctx ),
             'order_note'    => ( new CheckoutHandler() )->promptOrderNote( $ctx ),
             'shipping'      => ( new CheckoutHandler() )->selectShipping( $ctx ),
@@ -178,6 +179,7 @@ class Router {
     private function handleState( array $ctx, string $state, string $text ): void {
         match ( $state ) {
             'awaiting_search'           => ( new SearchHandler() )->receiveSearch( $ctx, $text ),
+            'awaiting_checkout_name'    => ( new CheckoutHandler() )->receiveName( $ctx, $text ),
             'awaiting_checkout_address' => ( new CheckoutHandler() )->receiveAddress( $ctx, $text ),
             'awaiting_order_note'       => ( new CheckoutHandler() )->receiveOrderNote( $ctx, $text ),
             'awaiting_coupon'           => ( new CartHandler() )->receiveCoupon( $ctx, $text ),
