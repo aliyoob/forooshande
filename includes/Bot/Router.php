@@ -107,8 +107,10 @@ class Router {
     }
 
     private function handleMessage( array $message ): void {
-        $chatId = $message['chat']['id'] ?? 0;
-        $text   = $message['text'] ?? '';
+        $chatId  = $message['chat']['id'] ?? 0;
+        $photos  = $message['photo'] ?? [];
+        $photo   = ! empty( $photos ) ? ( end( $photos )['file_id'] ?? null ) : null;
+        $text    = $message['text'] ?? $message['caption'] ?? '';
 
         // Contact shared
         if ( ! empty( $message['contact'] ) ) {
@@ -130,7 +132,7 @@ class Router {
         // Check state-based routing first
         $state = $botUser->state ?? 'idle';
         if ( $state !== 'idle' ) {
-            $this->handleState( $ctx, $state, $text );
+            $this->handleState( $ctx, $state, $text, $photo );
             return;
         }
 
@@ -176,7 +178,7 @@ class Router {
         ( new MenuHandler() )->showMainMenu( $ctx );
     }
 
-    private function handleState( array $ctx, string $state, string $text ): void {
+    private function handleState( array $ctx, string $state, string $text, ?string $photo = null ): void {
         match ( $state ) {
             'awaiting_search'           => ( new SearchHandler() )->receiveSearch( $ctx, $text ),
             'awaiting_checkout_name'    => ( new CheckoutHandler() )->receiveName( $ctx, $text ),
@@ -189,8 +191,8 @@ class Router {
             'waiting_edit_addr'         => ( new MenuHandler() )->saveNewAddress( $ctx, $text ),
             'awaiting_support_message'  => ( new SupportHandler() )->receiveMessage( $ctx, $text ),
             'awaiting_support_reply'    => ( new SupportHandler() )->sendReply( $ctx, $text ),
-            'awaiting_broadcast_type'   => ( new BroadcastHandler() )->receiveContent( $ctx, $text ),
-            'awaiting_broadcast_content'=> ( new BroadcastHandler() )->receiveContent( $ctx, $text ),
+            'awaiting_broadcast_type'   => ( new BroadcastHandler() )->receiveContent( $ctx, $text, $photo ),
+            'awaiting_broadcast_content'=> ( new BroadcastHandler() )->receiveContent( $ctx, $text, $photo ),
             'admin_search_order'     => ( new MenuHandler() )->showMainMenu( $ctx ),
             'admin_product_search'   => ( new MenuHandler() )->showMainMenu( $ctx ),
             'waiting_review'         => ( new MenuHandler() )->showMainMenu( $ctx ),

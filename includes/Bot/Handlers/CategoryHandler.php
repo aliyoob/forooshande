@@ -50,11 +50,7 @@ class CategoryHandler {
             $hasChildren = ! empty( $children ) && ! is_wp_error( $children );
 
             $emoji = $hasChildren ? '📁' : '📦';
-            $text .= "{$emoji} {$label}";
-            if ( $count > 0 ) {
-                $text .= ' (' . PersianDate::toPersianDigits( (string) $count ) . ')';
-            }
-            $text .= "\n";
+            $text .= "{$emoji} {$label}\n";
 
             $row[] = KeyboardBuilder::inlineButton(
                 "{$emoji} {$label}",

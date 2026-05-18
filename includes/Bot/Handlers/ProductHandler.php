@@ -14,7 +14,7 @@ class ProductHandler {
         $chatId = $ctx['chat_id'];
 
         $product = wc_get_product( $productId );
-        if ( ! $product || $product->get_status() !== 'publish' ) {
+        if ( ! $product || $product->get_status() !== 'publish' || $product->get_catalog_visibility() === 'hidden' ) {
             $bot->sendMessage( $chatId, '❌ محصول یافت نشد.' );
             return;
         }
@@ -269,24 +269,38 @@ class ProductHandler {
 
     public function showProductsByCategory( array $ctx, int $catId, int $page = 1 ): void {
         $perPage = (int) get_option( 'rf_products_per_page', 6 );
-        $term    = get_term( $catId );
 
-        $args = [
-            'status'   => 'publish',
-            'limit'    => $perPage,
-            'page'     => $page,
-            'category' => [ $term->slug ?? '' ],
-            'orderby'  => 'date',
-            'order'    => 'DESC',
+        // Use WP_Query directly with an explicit visibility tax_query so hidden products
+        // (tagged with 'exclude-from-catalog') are reliably excluded regardless of
+        // WooCommerce version or caching layer.
+        $tax_query = [
+            'relation' => 'AND',
+            [
+                'taxonomy' => 'product_cat',
+                'field'    => 'term_id',
+                'terms'    => [ $catId ],
+            ],
+            [
+                'taxonomy' => 'product_visibility',
+                'field'    => 'name',
+                'terms'    => [ 'exclude-from-catalog' ],
+                'operator' => 'NOT IN',
+            ],
         ];
 
-        $products = wc_get_products( $args );
+        $query = new \WP_Query( [
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => $perPage,
+            'paged'          => $page,
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'tax_query'      => $tax_query,
+        ] );
 
-        $count_args           = $args;
-        $count_args['limit']  = -1;
-        $count_args['return'] = 'ids';
-        $total = count( wc_get_products( $count_args ) );
-        $pages = max( 1, (int) ceil( $total / $perPage ) );
+        $products = array_values( array_filter( array_map( 'wc_get_product', $query->posts ) ) );
+        $total    = (int) $query->found_posts;
+        $pages    = max( 1, (int) ceil( $total / $perPage ) );
 
         $this->renderProductList( $ctx, $products, $page, $pages, "page:%d:cat:{$catId}", 'back_shop' );
     }
@@ -295,10 +309,11 @@ class ProductHandler {
         $perPage = (int) get_option( 'rf_products_per_page', 6 );
 
         $args = [
-            'status' => 'publish',
-            'limit'  => $perPage,
-            'page'   => $page,
-            's'      => $query,
+            'status'             => 'publish',
+            'catalog_visibility' => 'search',
+            'limit'              => $perPage,
+            'page'               => $page,
+            's'                  => $query,
         ];
 
         $products = wc_get_products( $args );
@@ -317,6 +332,17 @@ class ProductHandler {
         $perPage  = (int) get_option( 'rf_products_per_page', 6 );
         $sale_ids = wc_get_product_ids_on_sale();
 
+        if ( ! empty( $sale_ids ) ) {
+            // Filter out products that are hidden from the catalog
+            $sale_ids = wc_get_products( [
+                'include'            => $sale_ids,
+                'status'             => 'publish',
+                'catalog_visibility' => 'catalog',
+                'limit'              => -1,
+                'return'             => 'ids',
+            ] );
+        }
+
         if ( empty( $sale_ids ) ) {
             $ctx['bot']->sendMessage( $ctx['chat_id'], '🔥 در حال حاضر حراجی فعالی وجود ندارد.' );
             return;
@@ -334,10 +360,11 @@ class ProductHandler {
         $perPage = (int) get_option( 'rf_products_per_page', 6 );
 
         $args = [
-            'status'   => 'publish',
-            'limit'    => $perPage,
-            'page'     => $page,
-            'featured' => true,
+            'status'             => 'publish',
+            'catalog_visibility' => 'catalog',
+            'limit'              => $perPage,
+            'page'               => $page,
+            'featured'           => true,
         ];
 
         $products = wc_get_products( $args );
