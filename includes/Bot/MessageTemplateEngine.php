@@ -17,7 +17,7 @@ class MessageTemplateEngine {
             'rf_msg_request_phone'   => "📱 لطفاً شماره تلفن خود را با دکمه زیر ارسال کنید:",
             'rf_msg_order_status'    => "📦 سفارش شماره #{order_id}\nوضعیت: {order_status}\nتاریخ: {date}",
             'rf_msg_tracking'        => "📮 کد رهگیری سفارش #{order_id}:\nشرکت پستی: {shipping_company}\nکد رهگیری: {tracking_code}",
-            'rf_msg_new_order_admin' => "🔔 سفارش جدید #{order_id}\n👤 {customer_name}\n📱 {customer_phone}\n💰 مبلغ: {order_total}\n📋 محصولات:\n{products_list}",
+            'rf_msg_new_order_admin' => "🔔 سفارش جدید #{order_id}\n👤 {first_name} {last_name}\n📱 {phone}\n📍 آدرس: {address}\n📮 کدپستی: {postcode}\n💳 پرداخت: {payment_method}\n🚚 ارسال: {shipping_method}\n💰 مبلغ: {order_total}\n📝 توضیحات: {order_note}\n\n📋 محصولات:\n{products_list}",
             'rf_msg_product_update'  => "🔄 محصول بروزرسانی شد:\n📦 {product_name}\n💰 قیمت: {product_price}\n🔗 {product_url}",
             'rf_msg_product_display' => "📦 {product_name}\n💰 قیمت: {product_price}\n📊 موجودی: {stock_status}\n📝 {product_short_description}",
             'rf_msg_order_created'   => "✅ سفارش شما ثبت شد!\nشماره سفارش: #{order_id}\nمبلغ: {order_total}\n🙏 با تشکر از خرید شما",
@@ -58,28 +58,126 @@ class MessageTemplateEngine {
     public static function orderVars( \WC_Order $order ): array {
         $items_list = '';
         foreach ( $order->get_items() as $item ) {
-            $items_list .= sprintf(
-                "📦 %s × %d - %s\n",
-                $item->get_name(),
-                $item->get_quantity(),
-                PriceFormatter::format( $item->get_total() )
-            );
+            $line = '📦 ' . $item->get_name()
+                  . ' × ' . PersianDate::toPersianDigits( (string) $item->get_quantity() )
+                  . ' - ' . PriceFormatter::format( $item->get_total() );
+
+            // Append variation attributes (size/color/…) on a new indented line
+            $attrs = self::formatItemAttributes( $item );
+            if ( $attrs !== '' ) {
+                $line .= "\n   🏷 " . $attrs;
+            }
+            $items_list .= $line . "\n";
         }
 
-        $statuses = wc_get_order_statuses();
+        $statuses     = wc_get_order_statuses();
         $status_label = $statuses[ 'wc-' . $order->get_status() ] ?? $order->get_status();
 
+        // Customer / billing fields — fall back to shipping if billing is empty
+        $first_name  = $order->get_billing_first_name() ?: $order->get_shipping_first_name();
+        $last_name   = $order->get_billing_last_name()  ?: $order->get_shipping_last_name();
+        $full_name   = trim( $first_name . ' ' . $last_name );
+        if ( $full_name === '' ) {
+            $full_name = $order->get_formatted_billing_full_name();
+        }
+        $phone       = $order->get_billing_phone();
+        $email       = $order->get_billing_email();
+
+        // Address — prefer shipping address when set, otherwise billing
+        $hasShipping = (bool) $order->get_shipping_address_1();
+        $address_1   = $hasShipping ? $order->get_shipping_address_1() : $order->get_billing_address_1();
+        $address_2   = $hasShipping ? $order->get_shipping_address_2() : $order->get_billing_address_2();
+        $city        = $hasShipping ? $order->get_shipping_city()      : $order->get_billing_city();
+        $state_code  = $hasShipping ? $order->get_shipping_state()     : $order->get_billing_state();
+        $country     = $hasShipping ? $order->get_shipping_country()   : $order->get_billing_country();
+        $postcode    = $hasShipping ? $order->get_shipping_postcode()  : $order->get_billing_postcode();
+        $state_name  = ( $state_code && $country )
+            ? ( WC()->countries->get_states( $country )[ $state_code ] ?? $state_code )
+            : $state_code;
+
+        $address_full = trim(
+            ( $state_name ? $state_name . ' - ' : '' )
+            . ( $city ? $city . ' - ' : '' )
+            . trim( $address_1 . ' ' . $address_2 )
+        );
+
+        // Payment / shipping method labels
+        $payment_method  = $order->get_payment_method_title() ?: $order->get_payment_method();
+        $shipping_method = '';
+        foreach ( $order->get_shipping_methods() as $ship ) {
+            $shipping_method = $ship->get_method_title();
+            break;
+        }
+
+        // Totals
+        $shipping_total = (float) $order->get_shipping_total();
+        $discount_total = (float) $order->get_discount_total();
+        $subtotal       = (float) $order->get_subtotal();
+
         return [
-            '{order_id}'         => $order->get_id(),
-            '{order_status}'     => $status_label,
-            '{order_total}'      => PriceFormatter::format( $order->get_total() ),
-            '{customer_name}'    => $order->get_formatted_billing_full_name(),
-            '{customer_phone}'   => $order->get_billing_phone(),
-            '{products_list}'    => $items_list,
-            '{date}'             => PersianDate::format( $order->get_date_created()->date( 'Y-m-d H:i:s' ) ),
-            '{tracking_code}'    => $order->get_meta( '_rf_tracking_code' ) ?: '-',
-            '{shipping_company}' => $order->get_meta( '_rf_shipping_company' ) ?: '-',
+            '{order_id}'          => $order->get_id(),
+            '{order_status}'      => $status_label,
+            '{order_total}'       => PriceFormatter::format( $order->get_total() ),
+            '{order_subtotal}'    => PriceFormatter::format( $subtotal ),
+            '{order_shipping}'    => $shipping_total > 0 ? PriceFormatter::format( $shipping_total ) : 'رایگان',
+            '{order_discount}'    => $discount_total > 0 ? PriceFormatter::format( $discount_total ) : '۰',
+            '{order_note}'        => $order->get_customer_note() ?: '-',
+            '{customer_name}'     => $full_name ?: '-',
+            '{customer_phone}'    => $phone ?: '-',
+            '{customer_email}'    => $email ?: '-',
+            '{first_name}'        => $first_name ?: '-',
+            '{last_name}'         => $last_name ?: '-',
+            '{phone}'             => $phone ?: '-',
+            '{address}'           => $address_full ?: '-',
+            '{billing_address}'   => trim( $order->get_billing_address_1() . ' ' . $order->get_billing_address_2() ) ?: '-',
+            '{shipping_address}'  => trim( $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2() ) ?: '-',
+            '{city}'              => $city ?: '-',
+            '{state}'             => $state_name ?: '-',
+            '{postcode}'          => $postcode ?: '-',
+            '{postal_code}'       => $postcode ?: '-',
+            '{payment_method}'    => $payment_method ?: '-',
+            '{shipping_method}'   => $shipping_method ?: '-',
+            '{products_list}'     => $items_list,
+            '{date}'              => PersianDate::format( $order->get_date_created()->date( 'Y-m-d H:i:s' ) ),
+            '{tracking_code}'     => $order->get_meta( '_rf_tracking_code' ) ?: '-',
+            '{shipping_company}'  => $order->get_meta( '_rf_shipping_company' ) ?: '-',
         ];
+    }
+
+    /**
+     * Format a Woo order item's variation attributes / meta into a readable string.
+     * e.g. "رنگ: قرمز، سایز: XL"
+     */
+    private static function formatItemAttributes( \WC_Order_Item $item ): string {
+        $parts = [];
+
+        if ( $item instanceof \WC_Order_Item_Product ) {
+            $product = $item->get_product();
+            // Variation attributes (preferred — gives clean taxonomy term labels)
+            if ( $product && $product->is_type( 'variation' ) ) {
+                foreach ( $product->get_variation_attributes() as $attr => $value ) {
+                    if ( $value === '' ) continue;
+                    $taxonomy = str_replace( 'attribute_', '', $attr );
+                    $label    = wc_attribute_label( $taxonomy, $product );
+                    $term     = get_term_by( 'slug', $value, $taxonomy );
+                    $parts[]  = $label . ': ' . ( $term ? $term->name : $value );
+                }
+            }
+        }
+
+        // Fall back to hidden/custom item meta (skips _underscored internal keys)
+        if ( empty( $parts ) ) {
+            foreach ( $item->get_meta_data() as $meta ) {
+                $key = (string) $meta->key;
+                if ( $key === '' || $key[0] === '_' ) continue;
+                $value = is_scalar( $meta->value ) ? (string) $meta->value : '';
+                if ( $value === '' ) continue;
+                $label   = wc_attribute_label( $key );
+                $parts[] = $label . ': ' . $value;
+            }
+        }
+
+        return implode( '، ', $parts );
     }
 
     /**
@@ -160,9 +258,23 @@ class MessageTemplateEngine {
             '{order_id}'        => '۱۲۳۴',
             '{order_status}'    => 'تکمیل شده',
             '{order_total}'     => '۱,۲۵۰,۰۰۰ تومان',
+            '{order_subtotal}'  => '۱,۲۰۰,۰۰۰ تومان',
+            '{order_shipping}'  => '۵۰,۰۰۰ تومان',
+            '{order_discount}'  => '۰',
+            '{order_note}'      => 'لطفاً قبل از ارسال تماس بگیرید',
             '{customer_name}'   => 'علی رضایی',
+            '{customer_email}'  => 'ali@example.com',
             '{customer_phone}'  => '۰۹۱۲۳۴۵۶۷۸۹',
-            '{products_list}'   => "📦 شال دورگان × ۲\n📦 ایرپاد پرو × ۱",
+            '{address}'         => 'تهران - خیابان آزادی - پلاک ۱۲',
+            '{billing_address}' => 'خیابان آزادی، پلاک ۱۲',
+            '{shipping_address}'=> 'خیابان آزادی، پلاک ۱۲',
+            '{city}'            => 'تهران',
+            '{state}'           => 'تهران',
+            '{postcode}'        => '۱۲۳۴۵۶۷۸۹۰',
+            '{postal_code}'     => '۱۲۳۴۵۶۷۸۹۰',
+            '{payment_method}'  => 'پرداخت در محل',
+            '{shipping_method}' => 'پست پیشتاز',
+            '{products_list}'   => "📦 شال دورگان × ۲ - ۲۵۰,۰۰۰ تومان\n   🏷 رنگ: قرمز، سایز: متوسط\n📦 ایرپاد پرو × ۱ - ۱,۰۰۰,۰۰۰ تومان",
             '{date}'            => PersianDate::now(),
             '{tracking_code}'   => '۱۲۳۴۵۶۷۸۹۰',
             '{shipping_company}'=> 'پست پیشتاز',

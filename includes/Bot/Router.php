@@ -129,13 +129,6 @@ class Router {
             return;
         }
 
-        // Check state-based routing first
-        $state = $botUser->state ?? 'idle';
-        if ( $state !== 'idle' ) {
-            $this->handleState( $ctx, $state, $text, $photo );
-            return;
-        }
-
         // Menu buttons (reply keyboard)
         $menuMap = [
             get_option( 'rf_menu_shop', '🛍 فروشگاه' )       => [ CategoryHandler::class, 'showCategories' ],
@@ -152,26 +145,53 @@ class Router {
             get_option( 'rf_menu_recent', '🕐 اخیراً دیده‌شده' )=> [ ProductHandler::class, 'showRecent' ],
         ];
 
-        // Command handling
-        if ( $text === '/start' || str_starts_with( $text, '/start ' ) ) {
-            ( new StartHandler() )->handle( $ctx, $text );
-            return;
-        }
+        // Global escape-hatch: /start, /cancel, admin panel button, or any reply-keyboard menu button
+        // must ALWAYS work, even if the user is stuck in a state (e.g. awaiting_quantity).
+        // Without this, invalid input in a state-handler loops forever and the user can't escape.
+        $isMenuButton  = isset( $menuMap[ $text ] );
+        $isAdminButton = $this->isAdmin( $botUser ) && $text === '🔧 پنل مدیریت';
+        $isEscapeCmd   = $text === '/start' || str_starts_with( $text, '/start ' )
+                         || $text === '/cancel' || $text === '/menu';
 
-        // Admin commands
-        if ( $this->isAdmin( $botUser ) ) {
-            if ( $text === '🔧 پنل مدیریت' ) {
+        if ( $isEscapeCmd || $isMenuButton || $isAdminButton ) {
+            if ( ( $botUser->state ?? 'idle' ) !== 'idle' ) {
+                $this->state->clearState( $botUser->id );
+                $botUser->state      = 'idle';
+                $botUser->state_data = null;
+            }
+
+            if ( $text === '/cancel' ) {
+                $ctx['bot']->sendMessage( $chatId, '✅ عملیات لغو شد.' );
+                ( new MenuHandler() )->showMainMenu( $ctx );
+                return;
+            }
+
+            if ( $text === '/start' || str_starts_with( $text, '/start ' ) ) {
+                ( new StartHandler() )->handle( $ctx, $text );
+                return;
+            }
+
+            if ( $text === '/menu' ) {
+                ( new MenuHandler() )->showMainMenu( $ctx );
+                return;
+            }
+
+            if ( $isAdminButton ) {
                 ( new AdminBotHandler() )->showPanel( $ctx );
                 return;
             }
+
+            // $isMenuButton
+            $handler = $menuMap[ $text ];
+            ( new $handler[0]() )->{$handler[1]}( $ctx );
+            return;
         }
 
-        // Menu button matching
-        foreach ( $menuMap as $label => $handler ) {
-            if ( $text === $label ) {
-                ( new $handler[0]() )->{$handler[1]}( $ctx );
-                return;
-            }
+        // State-based routing
+        $state = $botUser->state ?? 'idle';
+        if ( $state !== 'idle' ) {
+            $this->handleState( $ctx, $state, $text, $photo );
+            return;
         }
 
         // Default: show main menu

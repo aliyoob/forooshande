@@ -256,7 +256,7 @@ class ProductHandler {
         $page     = (int) ( $ctx['parts'][1] ?? 1 );
         $type     = $ctx['parts'][2] ?? 'all';
         $catId    = (int) ( $ctx['parts'][3] ?? 0 );
-        $searchQ  = $ctx['parts'][4] ?? '';
+        $searchQ  = $ctx['parts'][3] ?? '';
 
         match ( $type ) {
             'cat'      => $this->showProductsByCategory( $ctx, $catId, $page ),
@@ -308,21 +308,27 @@ class ProductHandler {
     public function showSearchResults( array $ctx, string $query, int $page = 1 ): void {
         $perPage = (int) get_option( 'rf_products_per_page', 6 );
 
-        $args = [
-            'status'             => 'publish',
-            'catalog_visibility' => 'search',
-            'limit'              => $perPage,
-            'page'               => $page,
-            's'                  => $query,
+        $tax_query = [
+            [
+                'taxonomy' => 'product_visibility',
+                'field'    => 'name',
+                'terms'    => [ 'exclude-from-search' ],
+                'operator' => 'NOT IN',
+            ],
         ];
 
-        $products = wc_get_products( $args );
+        $wp_query = new \WP_Query( [
+            'post_type'      => 'product',
+            'post_status'    => 'publish',
+            'posts_per_page' => $perPage,
+            'paged'          => $page,
+            's'              => $query,
+            'tax_query'      => $tax_query,
+        ] );
 
-        $count_args           = $args;
-        $count_args['limit']  = -1;
-        $count_args['return'] = 'ids';
-        $total = count( wc_get_products( $count_args ) );
-        $pages = max( 1, (int) ceil( $total / $perPage ) );
+        $products = array_values( array_filter( array_map( 'wc_get_product', $wp_query->posts ) ) );
+        $total    = (int) $wp_query->found_posts;
+        $pages    = max( 1, (int) ceil( $total / $perPage ) );
 
         $encodedQ = urlencode( $query );
         $this->renderProductList( $ctx, $products, $page, $pages, "page:%d:search:{$encodedQ}", 'back_menu' );

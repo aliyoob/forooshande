@@ -5,14 +5,23 @@
         <input type="hidden" name="tab" value="messages">
 
         <p class="description">از متغیرهای زیر در پیام‌ها استفاده کنید:
-            <code>{order_id}</code>, <code>{order_total}</code>, <code>{order_status}</code>,
+            <strong>سفارش:</strong>
+            <code>{order_id}</code>, <code>{order_total}</code>, <code>{order_subtotal}</code>,
+            <code>{order_shipping}</code>, <code>{order_discount}</code>, <code>{order_status}</code>,
+            <code>{order_note}</code>, <code>{products_list}</code>,
+            <code>{payment_method}</code>, <code>{shipping_method}</code>,
+            <code>{tracking_code}</code>, <code>{shipping_company}</code><br>
+            <strong>مشتری:</strong>
+            <code>{first_name}</code>, <code>{last_name}</code>, <code>{customer_name}</code>,
+            <code>{phone}</code>, <code>{customer_phone}</code>, <code>{customer_email}</code><br>
+            <strong>آدرس:</strong>
+            <code>{address}</code>, <code>{billing_address}</code>, <code>{shipping_address}</code>,
+            <code>{city}</code>, <code>{state}</code>, <code>{postcode}</code>, <code>{postal_code}</code><br>
+            <strong>محصول:</strong>
             <code>{product_name}</code>, <code>{product_price}</code>,
-            <code>{first_name}</code>, <code>{last_name}</code>, <code>{phone}</code>,
-            <code>{customer_name}</code>, <code>{customer_phone}</code>,
-            <code>{tracking_code}</code>, <code>{shipping_company}</code>,
-            <code>{shop_name}</code>, <code>{date}</code>,
-            <code>{stock_status}</code>, <code>{product_short_description}</code>,
-            <code>{product_url}</code>, <code>{otp_code}</code>, <code>{otp_expire}</code>
+            <code>{stock_status}</code>, <code>{product_short_description}</code>, <code>{product_url}</code><br>
+            <strong>سایر:</strong>
+            <code>{shop_name}</code>, <code>{date}</code>, <code>{otp_code}</code>, <code>{otp_expire}</code>
         </p>
 
         <table class="form-table">
